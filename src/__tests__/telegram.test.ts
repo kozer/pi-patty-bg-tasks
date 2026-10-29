@@ -51,6 +51,13 @@ void describe("telegram steering", () => {
         assert.equal(t.aborts, 1);
     });
 
+    void it("passes untouched while a dialog waits for an answer", async () => {
+        const t = setup({ busy: true, backgrounds: true, prompting: true });
+        assert.equal(await t.handle(message("yes")), "pass");
+        assert.equal(await t.handle(media()), "pass");
+        assert.equal(t.backgroundCalls + t.aborts + t.steered.length, 0);
+    });
+
     void it("passes, so pi-telegram queues it, when the steer throws", async () => {
         const t = setup({ busy: true, backgrounds: true, steerThrows: true });
         assert.equal(await t.handle(message("say banana")), "pass");
@@ -68,7 +75,7 @@ function media(): TelegramUpdate {
     return update;
 }
 
-function setup(opts: { busy: boolean; backgrounds: boolean; steerThrows?: boolean }) {
+function setup(opts: { busy: boolean; backgrounds: boolean; steerThrows?: boolean; prompting?: boolean }) {
     const t = {
         aborts: 0,
         backgroundCalls: 0,
@@ -80,6 +87,7 @@ function setup(opts: { busy: boolean; backgrounds: boolean; steerThrows?: boolea
     const handler = telegramHandler({
         owner: OWNER,
         context: () => ctx as never,
+        prompting: () => opts.prompting ?? false,
         background: () => {
             t.backgroundCalls++;
             return opts.backgrounds;

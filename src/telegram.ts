@@ -40,6 +40,13 @@ type Registry = {
 export function registerTelegramSteering(pi: ExtensionAPI, reg: BackgroundRegistry): void {
     let ctx: ExtensionContext | undefined;
     let dispose: (() => void) | undefined;
+    let prompting = false;
+
+    // A dialog is waiting for the user (pi 1.x emits these); its answer may come
+    // from Telegram through another handler, so don't treat it as a steer.
+    const on = pi.on.bind(pi) as unknown as (event: string, handler: () => void) => void;
+    on("ui_prompt_start", () => (prompting = true));
+    on("ui_prompt_end", () => (prompting = false));
 
     pi.on("session_start", async (_event, c) => {
         ctx = c;
@@ -51,6 +58,7 @@ export function registerTelegramSteering(pi: ExtensionAPI, reg: BackgroundRegist
             telegramHandler({
                 owner,
                 context: () => ctx,
+                prompting: () => prompting,
                 background: (c) => reg.foreground.size > 0 && backgroundActiveForeground(reg, c as UiContext),
                 steer: (text) => pi.sendUserMessage(`${PREFIX} ${text}`, { deliverAs: "steer" }),
                 react: (chatId, messageId) => react(token, chatId, messageId),
@@ -68,6 +76,7 @@ export function registerTelegramSteering(pi: ExtensionAPI, reg: BackgroundRegist
 export function telegramHandler(deps: {
     owner: number;
     context(): ExtensionContext | undefined;
+    prompting?(): boolean;
     background(ctx: ExtensionContext): boolean;
     steer(text: string): void;
     react(chatId: number, messageId: number): void;
@@ -79,6 +88,7 @@ export function telegramHandler(deps: {
         if (text.startsWith("/")) return "pass"; // pi-telegram commands such as /abort
         const ctx = deps.context();
         if (!ctx || ctx.isIdle()) return "pass"; // idle: pi-telegram starts a normal turn
+        if (deps.prompting?.()) return "pass"; // a dialog is waiting for this answer
 
         if (m.text === undefined) {
             // Voice notes and photos need pi-telegram to fetch them, so they can't
