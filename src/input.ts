@@ -8,26 +8,26 @@ export function registerInputHandlers(pi: ExtensionAPI, reg: BackgroundRegistry)
     pi.on("input", async (event, ctx) => {
         // Cooperative steering (Claude Code parity): ANY input typed while a
         // foreground bash command is running backgrounds that command and
-        // re-delivers the input as the next turn — regardless of the message's
+        // re-delivers the input as a steer — regardless of the message's
         // steer/followUp streamingBehavior. We only intercept when a foreground
         // slot is active; everything else falls through to Pi.
         if (reg.foreground.size === 0) return { action: "continue" };
         // Don't intercept extension-sourced messages.
         if (event.source === "extension") return { action: "continue" };
 
-        const text = event.text;
         const bg = backgroundActiveForeground(reg, ctx as UiContext);
         if (!bg) return { action: "continue" };
 
-        // Abort the current turn so the bash tool returns the "backgrounded" result.
-        ctx.abort?.();
-
-        // Resubmit the user's message as a follow-up — Pi delivers it
-        // after the current turn settles. No polling needed.
+        // No ctx.abort() (see takeControl): backgrounding already makes the bash
+        // tool return, and aborting would end the run with the follow-up stuck in
+        // pi's queue, never sent. A steer lands as soon as the tool batch returns.
+        const content = event.images?.length
+            ? [{ type: "text" as const, text: event.text }, ...event.images]
+            : event.text;
         try {
-            pi.sendUserMessage(text, { deliverAs: "followUp" });
+            pi.sendUserMessage(content, { deliverAs: "steer" });
         } catch {
-            // Session ended between abort and resubmit — nothing to deliver to.
+            // Session ended before resubmit — nothing to deliver to.
         }
 
         return { action: "handled" };
