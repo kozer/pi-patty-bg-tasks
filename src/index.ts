@@ -25,6 +25,7 @@ import { registerMonitorTool } from "./tools/monitor.ts";
 import { registerShortcuts } from "./shortcuts.ts";
 import { registerCommands } from "./commands.ts";
 import { registerInputHandlers } from "./input.ts";
+import { registerTelegramSteering } from "./telegram.ts";
 
 /** Extension entry point. */
 export default function (pi: ExtensionAPI): void {
@@ -45,6 +46,7 @@ export default function (pi: ExtensionAPI): void {
     registerShortcuts(pi, reg);
     registerCommands(pi, reg);
     registerInputHandlers(pi, reg);
+    registerTelegramSteering(pi, reg);
 
     // ── Message rendering ─────────────────────────────────────────
     // <task-notification> messages render as one colored line: green for

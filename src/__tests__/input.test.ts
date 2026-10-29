@@ -18,11 +18,12 @@ type InputHandler = (
     },
     ctx: UiContext & {
         abort(): void;
+        isIdle(): boolean;
         signal?: AbortSignal;
     }
 ) => Promise<
     | { action: "continue" }
-    | { action: "transform"; text: string }
+    | { action: "transform"; text: string; images?: unknown }
     | { action: "handled" }
 >;
 
@@ -80,7 +81,8 @@ void describe("input steering (cooperative scheduler)", () => {
             makeCtx(notifications, { abort: () => { abortCalls++; } })
         );
         const r2 = await handler(
-            { type: "input", text: "second", source: "interactive", streamingBehavior: "steer" },
+            // Alt+Enter, so the interrupting steer (tested below) stays out of this case.
+            { type: "input", text: "second", source: "interactive", streamingBehavior: "followUp" },
             makeCtx(notifications, { abort: () => { abortCalls++; } })
         );
 
@@ -93,20 +95,69 @@ void describe("input steering (cooperative scheduler)", () => {
         assert.deepEqual(resubmitted, [{ text: "first", deliverAs: "steer" }]);
     });
 
-    void it("returns continue when no cooperative foreground task is active", async () => {
+    void it("with no foreground command, Enter interrupts and resends the message once idle", async () => {
         const reg = new BackgroundRegistry();
         const sent: { customType?: string }[] = [];
         const resubmitted: ResubmittedMessage[] = [];
+        let idle = false;
         const handler = registerAndGetHandler(reg, sent, resubmitted);
 
         const result = await handler(
-            { type: "input", text: "any steering", source: "interactive", streamingBehavior: "steer" },
+            { type: "input", text: "change of plan", source: "interactive", streamingBehavior: "steer" },
+            makeCtx([], { abort: () => { idle = true; }, isIdle: () => idle })
+        );
+
+        assert.deepEqual(result, { action: "handled" });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        assert.deepEqual(resubmitted, [{ text: "change of plan", deliverAs: undefined }]);
+    });
+
+    void it("keeps pi's queueing for Alt+Enter follow-ups with no foreground command", async () => {
+        const reg = new BackgroundRegistry();
+        const resubmitted: ResubmittedMessage[] = [];
+        let abortCalled = false;
+        const handler = registerAndGetHandler(reg, [], resubmitted);
+
+        const result = await handler(
+            { type: "input", text: "later", source: "interactive", streamingBehavior: "followUp" },
+            makeCtx([], { abort: () => { abortCalled = true; } })
+        );
+
+        assert.deepEqual(result, { action: "continue" });
+        assert.equal(abortCalled, false);
+        assert.equal(resubmitted.length, 0);
+    });
+
+    void it("a '+' prefix steers gently: no backgrounding, no abort, prefix stripped", async () => {
+        const reg = new BackgroundRegistry();
+        let paused = false;
+        let abortCalled = false;
+        const handler = registerAndGetHandler(reg, [], []);
+        reg.foreground.set("tc-gentle", { requestPause: () => { paused = true; } });
+
+        const result = await handler(
+            { type: "input", text: "+ also check the logs", source: "interactive", streamingBehavior: "steer" },
+            makeCtx([], { abort: () => { abortCalled = true; } })
+        );
+
+        assert.deepEqual(result, { action: "transform", text: "also check the logs", images: undefined });
+        assert.equal(paused, false);
+        assert.equal(abortCalled, false);
+    });
+
+    void it("leaves slash commands alone", async () => {
+        const reg = new BackgroundRegistry();
+        let paused = false;
+        const handler = registerAndGetHandler(reg, [], []);
+        reg.foreground.set("tc-slash", { requestPause: () => { paused = true; } });
+
+        const result = await handler(
+            { type: "input", text: "/bg-list", source: "interactive", streamingBehavior: "steer" },
             makeCtx([], { abort: () => {} })
         );
 
         assert.deepEqual(result, { action: "continue" });
-        assert.equal(sent.length, 0);
-        assert.equal(resubmitted.length, 0);
+        assert.equal(paused, false);
     });
 
     void it("ignores extension-sourced input (recursion guard)", async () => {
@@ -157,8 +208,8 @@ function registerAndGetHandler(
 
 function makeCtx(
     notifications: string[] = [],
-    actions?: { abort(): void }
-): UiContext & { abort(): void } {
+    actions?: { abort(): void; isIdle?(): boolean }
+): UiContext & { abort(): void; isIdle(): boolean } {
     return {
         ui: {
             notify: (message) => notifications.push(message),
@@ -169,5 +220,6 @@ function makeCtx(
             editor: async () => undefined,
         },
         abort: actions?.abort ?? (() => {}),
+        isIdle: actions?.isIdle ?? (() => true),
     };
 }

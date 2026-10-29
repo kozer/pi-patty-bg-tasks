@@ -18,6 +18,8 @@
 
 **Your agent shouldn't twiddle its thumbs while the build runs.** This is Claude Code's background-task experience, brought to Pi: kick off a long command, and instead of blocking the whole session, it slips into the background while the agent keeps working. Auto-background after 120 seconds, instant background with Ctrl+Shift+B, output capture, stall detection, and a full job manager — all in one extension.
 
+> **Fork.** This is [kozer/pi-patty-bg-tasks](https://github.com/kozer/pi-patty-bg-tasks), a fork of [patty-io/pi-patty-bg-tasks](https://github.com/patty-io/pi-patty-bg-tasks) at 2.0.0 (unreleased on npm). It changes [Cooperative Steering](#cooperative-steering-claude-code-parity): input no longer aborts the turn (which left the message stuck in pi's queue, never sent), it interrupts when no command is running, and it covers Telegram. Install it with `pi install git:github.com/kozer/pi-patty-bg-tasks`.
+
 ## Install
 
 ```
@@ -193,15 +195,18 @@ completed-but-unread jobs show `, unread` in `jobs list` and the sidebar.
 
 ## Cooperative Steering (Claude Code parity)
 
-Type a message while a backgroundable foreground command is running, and the extension steps in **before** Pi queues your text as steering:
+Type a message while pi works, and it lands now instead of waiting behind the current step:
 
-1. The active foreground command slides into the background (output keeps capturing — nothing is lost).
-2. The current agent turn is aborted.
-3. Your message is re-injected as a fresh user turn the instant the agent is idle.
+- **A foreground command is running:** it slides into the background (output keeps capturing; nothing is lost), and your message is delivered as a steer the moment the bash tool returns. Any input does this, Enter or Alt+Enter.
+- **The model is working with no command running:** Enter interrupts the run like Esc, and your message is sent as the next prompt. Alt+Enter keeps pi's follow-up queueing.
+- **Start the message with `+`** to keep pi's plain steer: it waits for the current step, and nothing is backgrounded or interrupted.
+- Slash commands are left alone.
 
-That's exactly how Claude Code behaves: submitting input during an interruptible tool aborts the tool and starts a new turn, instead of leaving your message stuck in line behind a long-running call. No polling, no waiting your turn.
+**Scope:** backgrounding applies to the `bash` tool this extension owns. Other long-running tools are interrupted instead.
 
-**Scope:** this applies to the `bash` tool this extension owns. Long-running tools the extension doesn't wrap fall back to Pi's native steering (queued, delivered at the next turn boundary).
+### Telegram ([pi-telegram](https://www.npmjs.com/package/@llblab/pi-telegram))
+
+pi-telegram queues a message sent while pi works until the run ends. When it runs (`PI_TELEGRAM_BOT` is set), the same steering applies to text from the owner (`allowedUserId` in `telegram.json`): a running command is backgrounded and the text steers in (marked with 👀), otherwise the run is interrupted and pi-telegram starts the message as the next turn. `+` works the same way. Voice notes and photos always interrupt, since pi-telegram has to fetch them.
 
 ## Status Bar
 
