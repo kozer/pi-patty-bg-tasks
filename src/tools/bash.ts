@@ -49,6 +49,10 @@ import {
 import { textBlock } from "../format.ts";
 import { bashParamSchema } from "./bash-params.ts";
 
+/** Appended when a running command is moved to the background. */
+export const STILL_RUNNING =
+    "\nIt is still running and you will be notified when it finishes. Do not run it again; carry on with the user's latest message.";
+
 /** UI context + cwd is all this tool needs from the host context. */
 type BashCtx = UiContext & { cwd: string };
 
@@ -281,12 +285,14 @@ async function runForeground(args: {
 
         if (race.kind === "backgrounded") {
             promoteToBackground();
-            // Claude Code's exact tool-result strings: a distinct line for a
-            // manual background, one generic line for the timeout path.
+            // Claude Code's tool-result strings (a distinct line for a manual
+            // background, one generic line for the timeout path), plus a note so
+            // weaker models don't rerun a command that is still going.
             const text =
-                race.reason === "manual"
+                (race.reason === "manual"
                     ? `Command was manually backgrounded by user with ID: ${id}. Output is being written to: ${logPath}`
-                    : `Command running in background with ID: ${id}. Output is being written to: ${logPath}`;
+                    : `Command running in background with ID: ${id}. Output is being written to: ${logPath}`) +
+                STILL_RUNNING;
             return { content: [textBlock(text)], details: undefined };
         }
 

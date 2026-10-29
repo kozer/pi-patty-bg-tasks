@@ -18,7 +18,7 @@
 
 **Your agent shouldn't twiddle its thumbs while the build runs.** This is Claude Code's background-task experience, brought to Pi: kick off a long command, and instead of blocking the whole session, it slips into the background while the agent keeps working. Auto-background after 120 seconds, instant background with Ctrl+Shift+B, output capture, stall detection, and a full job manager — all in one extension.
 
-> **Fork.** This is [kozer/pi-patty-bg-tasks](https://github.com/kozer/pi-patty-bg-tasks), a fork of [patty-io/pi-patty-bg-tasks](https://github.com/patty-io/pi-patty-bg-tasks) at 2.0.0 (unreleased on npm). It changes [Cooperative Steering](#cooperative-steering-claude-code-parity): input no longer aborts the turn (which left the message stuck in pi's queue, never sent), it interrupts when no command is running, and it covers Telegram. Install it with `pi install git:github.com/kozer/pi-patty-bg-tasks`.
+> **Fork.** This is [kozer/pi-patty-bg-tasks](https://github.com/kozer/pi-patty-bg-tasks), a fork of [patty-io/pi-patty-bg-tasks](https://github.com/patty-io/pi-patty-bg-tasks) at 2.0.0 (unreleased on npm). It changes [Cooperative Steering](#cooperative-steering-claude-code-parity): input no longer aborts the turn (which left the message stuck in pi's queue, never sent), it interrupts when no command is running, it covers Telegram, and a backgrounded command's tool result tells the model the command is still running so it doesn't rerun it. Install it with `pi install git:github.com/kozer/pi-patty-bg-tasks`.
 
 ## Install
 
@@ -206,7 +206,7 @@ Type a message while pi works, and it lands now instead of waiting behind the cu
 
 ### Telegram ([pi-telegram](https://www.npmjs.com/package/@llblab/pi-telegram))
 
-pi-telegram queues a message sent while pi works until the run ends. When it runs (`PI_TELEGRAM_BOT` is set), the same steering applies to text from the owner (`allowedUserId` in `telegram.json`): a running command is backgrounded and the text steers in (marked with 👀), otherwise the run is interrupted and pi-telegram starts the message as the next turn. `+` works the same way. Voice notes and photos always interrupt, since pi-telegram has to fetch them.
+pi-telegram queues a message sent while pi works until the run ends. When it runs (`PI_TELEGRAM_BOT` is set), the same steering applies to text from the owner (`allowedUserId` in `telegram.json`): a running command is backgrounded and the text steers in (marked with 👀), otherwise the run is interrupted and pi-telegram starts the message as the next turn. `+` works the same way. Voice notes and photos can't steer in, since pi-telegram has to fetch them: a running command is backgrounded (it keeps running), then the run is interrupted and pi-telegram starts the note as the next turn.
 
 ## Status Bar
 

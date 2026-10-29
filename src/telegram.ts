@@ -4,7 +4,8 @@
 // reach pi's input event: pi-telegram queues a message sent while pi works until
 // the run ends. While pi works, a text from the owner now backgrounds the running
 // foreground command and steers in, or (with no command) interrupts the run and
-// is left to pi-telegram, which starts it as the next Telegram turn. Active only
+// is left to pi-telegram, which starts it as the next Telegram turn. A voice note
+// or photo backgrounds the command and interrupts the run. Active only
 // when PI_TELEGRAM_BOT is set, i.e. when pi-telegram runs.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -79,9 +80,16 @@ export function telegramHandler(deps: {
         const ctx = deps.context();
         if (!ctx || ctx.isIdle()) return "pass"; // idle: pi-telegram starts a normal turn
 
-        // Text only: voice notes and photos need pi-telegram to fetch them.
+        if (m.text === undefined) {
+            // Voice notes and photos need pi-telegram to fetch them, so they can't
+            // steer in: keep a running command alive in the background, then
+            // interrupt so pi-telegram starts the note as the next turn.
+            deps.background(ctx);
+            ctx.abort();
+            return "pass";
+        }
         const gentle = text.startsWith(GENTLE_PREFIX);
-        if (gentle || (m.text !== undefined && deps.background(ctx))) {
+        if (gentle || deps.background(ctx)) {
             try {
                 deps.steer(gentle ? text.slice(GENTLE_PREFIX.length).trim() : text);
             } catch {
@@ -91,8 +99,8 @@ export function telegramHandler(deps: {
             deps.react(m.chat.id, m.message_id);
             return "consume";
         }
-        // Interrupt, then let pi-telegram queue the message (voice and photos too):
-        // it starts it as the next Telegram turn once the run stops.
+        // Interrupt, then let pi-telegram queue the message: it starts it as the
+        // next Telegram turn once the run stops.
         ctx.abort();
         return "pass";
     };

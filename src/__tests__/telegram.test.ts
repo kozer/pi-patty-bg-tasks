@@ -37,12 +37,17 @@ void describe("telegram steering", () => {
         assert.equal(busy.aborts + busy.steered.length + idle.aborts, 0);
     });
 
-    void it("a voice note or photo (no text) interrupts instead of backgrounding", async () => {
+    void it("a voice note or photo (no text) backgrounds the command, interrupts, and is left to pi-telegram", async () => {
         const t = setup({ busy: true, backgrounds: true });
-        const update = message("");
-        delete update.message!.text;
-        assert.equal(await t.handle(update), "pass");
-        assert.equal(t.backgroundCalls, 0);
+        assert.equal(await t.handle(media()), "pass");
+        assert.equal(t.backgroundCalls, 1);
+        assert.equal(t.aborts, 1);
+        assert.deepEqual(t.steered, []);
+    });
+
+    void it("a voice note or photo with no command to background interrupts", async () => {
+        const t = setup({ busy: true, backgrounds: false });
+        assert.equal(await t.handle(media()), "pass");
         assert.equal(t.aborts, 1);
     });
 
@@ -55,6 +60,12 @@ void describe("telegram steering", () => {
 
 function message(text: string, from = OWNER): TelegramUpdate {
     return { message: { message_id: 7, chat: { id: OWNER, type: "private" }, from: { id: from }, text } };
+}
+
+function media(): TelegramUpdate {
+    const update = message("");
+    delete update.message!.text;
+    return update;
 }
 
 function setup(opts: { busy: boolean; backgrounds: boolean; steerThrows?: boolean }) {

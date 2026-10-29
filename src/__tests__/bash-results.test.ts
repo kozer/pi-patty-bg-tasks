@@ -1,7 +1,7 @@
 import { describe, it, after } from "node:test";
 import assert from "node:assert/strict";
 import { BackgroundRegistry } from "../state.ts";
-import { registerBashTool } from "../tools/bash.ts";
+import { registerBashTool, STILL_RUNNING } from "../tools/bash.ts";
 import { killProcessTree } from "../spawn.ts";
 import { EVENT, type Job } from "../types.ts";
 
@@ -85,7 +85,7 @@ void describe("bash tool — Claude Code tool-result strings", () => {
         spawnedPids.push(job.pid);
         assert.equal(
             res.content[0].text,
-            `Command was manually backgrounded by user with ID: ${job.id}. Output is being written to: ${job.logPath}`
+            `Command was manually backgrounded by user with ID: ${job.id}. Output is being written to: ${job.logPath}` + STILL_RUNNING
         );
     });
 
@@ -102,7 +102,7 @@ void describe("bash tool — Claude Code tool-result strings", () => {
         spawnedPids.push(job.pid);
         assert.equal(
             res.content[0].text,
-            `Command running in background with ID: ${job.id}. Output is being written to: ${job.logPath}`
+            `Command running in background with ID: ${job.id}. Output is being written to: ${job.logPath}` + STILL_RUNNING
         );
     });
 
